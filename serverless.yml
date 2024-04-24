@@ -1,0 +1,1967 @@
+service:
+    name: falcon-metrics-api
+
+plugins:
+    #   - serverless-middleware # Must stay before serverless-offline and serverless-webpack
+    - serverless-webpack
+    - serverless-offline
+    - serverless-offline-sns
+    - serverless-prune-plugin
+    - serverless-plugin-split-stacks
+custom:
+    # middleware:
+    #     pre:
+    #         - src/common/request_middleware/index.beforeRequest
+    #     pos:
+    #         - then: src/common/request_middleware/index.afterRequest
+    #         - catch: src/common/request_middleware/index.errorHandler
+    webpack:
+        webpackConfig: ./webpack.config.js
+        includeModules: true
+
+    serverless-offline:
+        # change the ports so they don't interfere when we're running UI locally
+        httpPort: 4000
+        webSocketPort: 4001
+        lambdaPort: 4002
+        # auto-refresh doesn't work too well with node unless we use child processes
+        useChildProcesses: true
+    prune:
+        automatic: true
+        number: 5
+    splitStacks:
+        perFunction: false
+        perType: false
+        perGroupFunction: true
+        nestedStackCount: 5
+    serverless-offline-sns:
+        port: 4005 # a free port for the sns server to run on
+        debug: false
+
+# allow .env
+useDotenv: true
+
+provider:
+    name: aws
+    stage: ${env:STAGE, 'prod'}
+    region: ${env:AWS_DEFAULT_REGION,'ap-southeast-2'}
+    runtime: nodejs18.x
+    apiName: ${self:service.name}
+    httpApi: ${file(./serverless/apiGateway.js)}
+    # If we blow this timeout we have some serious perfomance problems
+    timeout: 30
+    versionFunctions: false
+
+    environment:
+        # AWS_NODEJS_CONNECTION_REUSE_ENABLED: 1
+        API_VERSION: ${file(./serverless/generate_version.js):generateVersion}
+        STAGE: ${self:provider.stage}
+        DB_NAMESPACE: ${env:DB_NAMESPACE, 'api-${self:provider.stage}'}-
+
+        REACT_APP_API_BASE_URL: ${env:REACT_APP_API_BASE_URL, 'https://api.example.com/'}
+
+        # Make the stack traces point to the original function
+        NODE_OPTIONS: '--enable-source-maps'
+
+        LOG_LEVEL: ${env:LOG_LEVEL, 'error'}
+
+        AUTH0_CLIENT_ID: ${file(./secrets.json):AUTH0_CLIENT_ID}
+        AUTH0_CLIENT_PUBLIC_KEY: ${file(./public_key)}
+
+        AUTH0_API_CLIENT_ID: ${env:AUTH0_API_CLIENT_ID}
+        AUTH0_API_CLIENT_SECRET: ${env:AUTH0_API_CLIENT_SECRET}
+        AUTH0_API_AUDIENCE: ${env:AUTH0_API_AUDIENCE}
+        SLACK_CHANNEL_URL: ${env:SLACK_CHANNEL_URL}
+        DATADOG_API_KEY: ${env:DATADOG_API_KEY}
+
+    #Add vpc details here
+    vpc:
+        securityGroupIds:
+            - sg-########
+        subnetIds:
+            - subnet-#######
+            - subnet-######
+            - subnet-#####
+
+    # Create the iamroles here , might need to replace the actual resources' ARN
+    iamRoleStatements:
+        - Effect: 'Allow'
+          Action:
+              - secretsmanager:*
+              - s3:*
+          Resource: '*'
+        - Effect: 'Allow'
+          Action:
+              - s3:GetObject
+          Resource: 'arn:aws:s3:::falcon-metrics-mock-data/*'
+        - Effect: 'Allow'
+          Action:
+              - sns:Publish
+          Resource: 'arn:aws:sns:ap-southeast-2:906466243975:falcon-metrics-customer-telemetry'
+        - Effect: 'Allow'
+          Action:
+              - logs:DescribeLogGroups
+              - logs:DescribeLogStreams
+              - logs:PutLogEvents
+          Resource:
+              - 'arn:aws:logs:ap-southeast-2:906466243975:log-group:falcon-metrics/customer-telemetry:*'
+              - 'arn:aws:logs:ap-southeast-2:906466243975:log-group: falcon-metrics/customer-telemetry:log-stream:*'
+        - Effect: Allow
+          Action:
+            - sqs:*
+          Resource: "*"
+
+functions:
+    datasources-signed-patch:
+        handler: src/datasources/signed.patch
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/{provider}/{namespace}/signed
+                  method: PATCH
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    datasources-get:
+        handler: src/datasources/datasources.get
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    datasources-patch:
+        handler: src/datasources/datasources.patch
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/{id}
+                  method: PATCH
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    datasources-delete:
+        handler: src/datasources/datasources.deleteHandler
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/{id}
+                  method: DELETE
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    datasources-settings-get:
+        handler: src/datasources/settings.get
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/{provider}/{namespace}/settings
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    datasources-settings-post:
+        handler: src/datasources/settings.post
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/{provider}/{namespace}/settings
+                  method: POST
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    datasources-normalization-get:
+        handler: src/datasources/normalization.get
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/{provider}/{namespace}/normalization
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    datasources-normalization-post:
+        handler: src/datasources/normalization.post
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/{provider}/{namespace}/normalization
+                  method: POST
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    datasources-contexts-get:
+        handler: src/datasources/contexts.get
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/{provider}/{namespace}/contexts
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    datasources-contexts-post:
+        handler: src/datasources/contexts.post
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/{provider}/{namespace}/contexts
+                  method: POST
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    datasources-contexts-jira-cloud:
+        handler: src/datasources/jira-cloud.contexts
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/jira-cloud/{namespace}/contexts/import
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    datasources-contexts-azure:
+        handler: src/datasources/azure.contexts
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/azure-boards/{namespace}/contexts/import
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    datasources-contexts-jira-server:
+        handler: src/datasources/jira-server.contexts
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/jira-server/{namespace}/contexts/import
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    datasources-projects-get:
+        handler: src/datasources/projects.get
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/{provider}/{namespace}/projects
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    datasources-projects-post:
+        handler: src/datasources/projects.post
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/{provider}/{namespace}/projects
+                  method: POST
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    datasources-projects-jira-cloud:
+        handler: src/datasources/jira-cloud.projects
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/jira-cloud/{namespace}/projects/import
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    datasources-projects-jira-server:
+        handler: src/datasources/jira-server.projects
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/jira-server/{namespace}/projects/import
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    datasources-projects-azure:
+        handler: src/datasources/azure.projects
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/azure-boards/{namespace}/projects/import
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    datasources-workflows-post:
+        handler: src/datasources/workflows.post
+        memorySize: 2048
+        timeout: 300
+        events:
+            - httpApi:
+                  path: /datasources/{provider}/{namespace}/workflows
+                  method: POST
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    datasources-workflows-get:
+        handler: src/datasources/workflows.get
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/{provider}/{namespace}/workflows
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    datasources-workflows-jira-cloud:
+        handler: src/datasources/jira-cloud.workflows
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/jira-cloud/{namespace}/workflows/import
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+                  
+    datasources-workflows-jira-server:
+        handler: src/datasources/jira-server.workflows
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/jira-server/{namespace}/workflows/import
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+    
+    datasources-workflows-azure:
+        handler: src/datasources/azure.workflows
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/azure-boards/{namespace}/workflows/import
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    datasources-jira-cloud-post:
+        handler: src/datasources/jira-cloud.post
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/jira-cloud
+                  method: POST
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    datasources-jira-server-post:
+        handler: src/datasources/jira-server.post
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/jira-server
+                  method: POST
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    datasources-azure-post:
+        handler: src/datasources/azure.post
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/azure-boards
+                  method: POST
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    datasources-sprints-get:
+        handler: src/datasources/sprints.get
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/sprints
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    kanbanize-projects-import:
+        handler: src/datasources/kanbanize.getProjects
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/kanbanize/{namespace}/projects/import
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    kanbanize-workspaces-post:
+        handler: src/datasources/kanbanize.postWorkspaces
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/kanbanize
+                  method: POST
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    kanbanize-workflows-import:
+        handler: src/datasources/kanbanize.getWorkflows
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/kanbanize/{namespace}/workflows/import
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    kanbanize-workflows-get:
+        handler: src/datasources/workflows.getKanbanize
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/{provider}/{namespace}/workflows/kanbanize-workflows
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    kanbanize-workflows-post:
+        handler: src/datasources/workflows.postKanbanize
+        memorySize: 2048
+        timeout: 300
+        events:
+            - httpApi:
+                  path: /datasources/{provider}/{namespace}/workflows/kanbanize-post
+                  method: POST
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    kanbanize-workitemtypes-import:
+        handler: src/datasources/kanbanize.getWorkItemTypes
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/kanbanize/{namespace}/workitemtypes/import
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    kanbanize-workitemtypes-get:
+        handler: src/datasources/workitemtypes.get
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/{provider}/{namespace}/workitemtypes
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    kanbanize-workitemtypes-post:
+        handler: src/datasources/workitemtypes.post
+        memorySize: 2048
+        timeout: 300
+        events:
+            - httpApi:
+                  path: /datasources/{provider}/{namespace}/workitemtypes
+                  method: POST
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    kanbanize-contexts-import:
+        handler: src/datasources/kanbanize.getContexts
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/kanbanize/{namespace}/contexts/import
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    kanbanize-customfields-import:
+        handler: src/datasources/kanbanize.getCustomFields
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/kanbanize/{namespace}/customfields/import
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+    signup:
+        handler: src/signup/handler.signup
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /signup
+                  method: post
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    resend-email:
+        handler: src/signup/handler.resendemail
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /resendemail
+                  method: post
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    contact-us:
+        handler: src/contact_us/handler.sendMessage
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /contact-us
+                  method: post
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    get-trial-info:
+        handler: src/trial/handler.getTrialInfo
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /trial-info
+                  method: get
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    billing-checkout:
+        handler: src/billing/handler.billingCheckout
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /billingCheckout
+                  method: post
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    about:
+        handler: src/about/handler.about
+        memorySize: 2048
+        events:
+            - httpApi: GET /about
+
+    rolling-window:
+        handler: src/rolling_window/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /rolling-window
+                  method: get
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    customfields:
+        handler: src/customfields/custom_fields_handler.getCustomFields
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /customfields
+                  method: get
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    linktypes:
+        handler: src/linktypes/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /linktypes
+                  method: get
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    configuration_workItemType:
+        handler: src/configuration/work_item_type_handler.getTypes
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /configuration/workitemtype
+                  method: get
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    configuration_context:
+        handler: src/context/context_handler.getContexts
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /configuration/context
+                  method: get
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    configuration_classOfService:
+        handler: src/configuration/class_of_service_handler.getClassesOfService
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /configuration/classofservice
+                  method: get
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    configuration_assignedTo:
+        handler: src/configuration/get_state_column_handler.getAssignees
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /configuration/assignees
+                  method: get
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    configuration_resolution:
+        handler: src/configuration/get_state_column_handler.getResolution
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /configuration/resolutions
+                  method: get
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    leadtime:
+        handler: src/leadtime/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /leadtime
+                  method: get
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    summary-table:
+        handler: src/summary/handler.getSummaryTable
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /summary-table
+                  method: get
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    wip:
+        handler: src/wip/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /wip
+                  method: get
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    triage:
+        handler: src/triage/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /triage
+                  method: get
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    objectives:
+        handler: src/obeya/objectives/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /obeya/objectives
+                  method: get
+                  cors: true
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    obeya:
+        handler: src/obeya/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /obeya
+                  method: get
+                  cors: true
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    obeya-contexts:
+        handler: src/obeya/contexts/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /obeya-contexts
+                  method: get
+                  cors: true
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    obeya-risk:
+        handler: src/obeya/risks/handler.createRisk
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /obeya/risk
+                  method: POST
+                  cors: true
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    obeya-risk-update:
+        handler: src/obeya/risks/handler.updateRisk
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /obeya/risk
+                  method: PATCH
+                  cors: true
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    obeya-predictive-analysis:
+        handler: src/obeya/predictive_analysis/handler.getPredictiveAnalysis
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /obeya/predictive-analysis
+                  method: GET
+                  cors: true
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    obeya-forecasting-settings-create:
+        handler: src/obeya/predictive_analysis/forecasting_settings/handler.createOrUpdateForecastingSettings
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /obeya/predictive-analysis/settings
+                  method: POST
+                  cors: true
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    obeya-throughput-preview:
+        handler: src/obeya/predictive_analysis/forecasting_settings/handler.getThroughputPreview
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /obeya/predictive-analysis/settings/throughput-preview
+                  method: GET
+                  cors: true
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    obeya-risk-delete:
+        handler: src/obeya/risks/handler.removeRisk
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /obeya/risk/{id}
+                  method: DELETE
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    obeya-associate-workitem-dependencies:
+        handler: src/obeya/dependencies/handler.getAssociateWorkitemDependencies
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /obeya/associate-workitem-dependencies
+                  method: GET
+                  cors: true
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    obeya-save-associate-dependencies:
+        handler: src/obeya/dependencies/handler.saveAssociateWorkItemDependency
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /obeya/associate-workitem-dependencies
+                  method: POST
+                  cors: true
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    obeya-dependency:
+        handler: src/obeya/dependencies/handler.createDependency
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /obeya/dependency
+                  method: POST
+                  cors: true
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    obeya-dependency-update:
+        handler: src/obeya/dependencies/handler.updateDependency
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /obeya/dependency
+                  method: PATCH
+                  cors: true
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    obeya-dependency-delete:
+        handler: src/obeya/dependencies/handler.removeDependency
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /obeya/dependency/{id}
+                  method: DELETE
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    obeya-linktypes:
+        handler: src/obeya_linktypes/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /obeya_linktypes
+                  method: get
+                  cors: true
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    objectives-searchParentWorkitems:
+        handler: src/obeya/objectives/handler.searchParentWorkitems
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /obeya/objectives/parent-workitems
+                  method: get
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    objectives-post:
+        handler: src/obeya/objectives/handler.postOrPatchOKR
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /obeya/objectives
+                  method: POST
+                  cors: true
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    objectives-update:
+        handler: src/obeya/objectives/handler.postOrPatchOKR
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /obeya/objectives
+                  method: PATCH
+                  cors: true
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    objectives-delete:
+        handler: src/obeya/objectives/handler.deleteOKR
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /obeya/objectives-delete
+                  method: POST
+                  cors: true
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    obeya_rooms:
+        handler: src/obeya/obeya_rooms/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /obeya/rooms/all
+                  method: get
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    obeya_rooms_delete:
+        handler: src/obeya/obeya_rooms/handler.deleteObeyaRoom
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /obeya/room/delete
+                  method: POST
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    obeya_rooms_new:
+        handler: src/obeya/obeya_rooms/handler.saveObeyaRoom
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /obeya/room/create
+                  method: POST
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    obeya_rooms_patch:
+        handler: src/obeya/obeya_rooms/handler.editObeyaRoom
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /obeya/room/edit
+                  method: PATCH
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    portfolio_roadmap_patch:
+        handler: src/obeya/obeya_rooms/handler.editRoadmap
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /obeya/roadmap/edit
+                  method: PATCH
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    obeya_roadmap_patch:
+        handler: src/obeya/obeya_rooms/handler.editObeyaRoadmap
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /obeya/roadmap/obeya/edit
+                  method: PATCH
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    delivery-management-kanban:
+        handler: src/value_stream_management/delivery_management/kanban/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /value-stream-management/delivery-management/kanban
+                  method: GET
+                  cors: true
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    delivery-management-runchart:
+        handler: src/value_stream_management/delivery_management/run_chart/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /value-stream-management/delivery-management/run-chart
+                  method: GET
+                  cors: true
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    delivery-management-service-level:
+        handler: src/value_stream_management/delivery_management/service_level/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /value-stream-management/delivery-management/service-level
+                  method: GET
+                  cors: true
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    delivery-management-flow-items:
+        handler: src/value_stream_management/delivery_management/flow_items/handler.getEverything
+        memorySize: 3072
+        events:
+            - httpApi:
+                  path: /value-stream-management/delivery-management/flow-items
+                  method: GET
+                  cors: true
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    delivery-management-profile-of-work:
+        handler: src/value_stream_management/delivery_management/profile_of_work/handler.getEverything
+        memorySize: 3072
+        events:
+            - httpApi:
+                  path: /value-stream-management/delivery-management/profile-of-work
+                  method: GET
+                  cors: true
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    delivery-management-time-distribution:
+        handler: src/value_stream_management/delivery_management/time_distribution/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /value-stream-management/delivery-management/time-distribution
+                  method: GET
+                  cors: true
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    continuous-improvements-flow-analysis:
+        handler: src/value_stream_management/continuous_improvements/flow_analysis/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /value-stream-management/continuous-improvements/flow-analysis
+                  method: GET
+                  cors: true
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    continuous-improvements-cfd:
+        handler: src/value_stream_management/continuous_improvements/cfd/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /value-stream-management/continuous-improvements/cfd
+                  method: GET
+                  cors: true
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    continuous-improvements-lead-time:
+        handler: src/value_stream_management/continuous_improvements/lead_time/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /value-stream-management/continuous-improvements/lead-time
+                  method: GET
+                  cors: true
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    continuous-improvements-flow-of-demands:
+        handler: src/value_stream_management/continuous_improvements/flow_of_demands/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /value-stream-management/continuous-improvements/flow-of-demands
+                  method: GET
+                  cors: true
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    continuous-improvements-actionable:
+        handler: src/value_stream_management/continuous_improvements/actionable_insights/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /value-stream-management/continuous-improvements/actionable-insights
+                  method: GET
+                  cors: true
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    insights_views:
+        handler: src/insights_views/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /insights-views
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    checkpoints_views:
+        handler: src/checkpoints_views/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /checkpoints-views
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    checkpoints_snapshots:
+        handler: src/checkpoints_views/handler.getCheckpointsSnasphots
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /checkpoints-snapshots
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    checkpoints_views_save:
+        handler: src/checkpoints_views/handler.postCheckpointsView
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /checkpoints-views
+                  method: POST
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    checkpoints_views_update:
+        handler: src/checkpoints_views/handler.patchCheckpointsView
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /checkpoints-views
+                  method: PATCH
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    checkpoints_views_delete:
+        handler: src/checkpoints_views/handler.removeCheckpoint
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /checkpoints-views/{id}
+                  method: DELETE
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    insights_views_save:
+        handler: src/insights_views/handler.postInsightView
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /insights-views
+                  method: POST
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    events:
+        handler: src/events/handler.getAllEvents
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /events
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    events-post:
+        handler: src/events/handler.postEvent
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /events
+                  method: POST
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    events-patch:
+        handler: src/events/handler.patchEvent
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /events
+                  method: PATCH
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    events-delete:
+        handler: src/events/handler.removeEvent
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /events/{id}
+                  method: DELETE
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    events-preview:
+        handler: src/events/handler.getEvent
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /events/{eventId}
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    horizons:
+        handler: src/visions/handler.getAllHorizons
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /horizons
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    visions:
+        handler: src/visions/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /visions
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    visions-get:
+        handler: src/visions/handler.getVision
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /visions/{id}
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    visions-post:
+        handler: src/visions/handler.postVision
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /visions
+                  method: POST
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    visions-patch:
+        handler: src/visions/handler.patchVision
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /visions
+                  method: PATCH
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    visions-delete:
+        handler: src/visions/handler.removeVision
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /visions/{id}
+                  method: DELETE
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    strategies:
+        handler: src/strategies/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /strategies
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    strategies-get:
+        handler: src/strategies/handler.getStrategy
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /strategies/{id}
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    strategies-post:
+        handler: src/strategies/handler.postStrategy
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /strategies
+                  method: POST
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    strategies-patch:
+        handler: src/strategies/handler.patchStrategy
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /strategies
+                  method: PATCH
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    strategies-delete:
+        handler: src/strategies/handler.removeStrategy
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /strategies/{id}
+                  method: DELETE
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    strategies-objective-preview:
+        handler: src/strategies/handler.getObjectivePreview
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /strategies/objective/{objectiveId}
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    strategies-key-result-preview:
+        handler: src/strategies/handler.getKeyResultPreview
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /strategies/keyResult/{keyResultId}
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    strategies-key-result-progress:
+        handler: src/strategies/handler.getKeyResultProgress
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /strategies/keyResult/{keyResultId}/progress
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    comments-replies:
+        handler: src/comments/handler.getCommentWithReplies
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /comments/{id}
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    comments:
+        handler: src/comments/handler.getAllComments
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /comments
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    comments-post:
+        handler: src/comments/handler.postComment
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /comments
+                  method: POST
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    comments-patch:
+        handler: src/comments/handler.patchComment
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /comments
+                  method: PATCH
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    comments-delete:
+        handler: src/comments/handler.removeComment
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /comments/{id}
+                  method: DELETE
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    updates:
+        handler: src/updates/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /updates
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    updates-replies:
+        handler: src/updates/handler.getUpdateWithReplies
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /updates/{id}
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+    
+    updates-post:
+        handler: src/updates/handler.postUpdate
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /updates
+                  method: POST
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    update-patch:
+        handler: src/updates/handler.patchUpdateItem
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /updates/{id}
+                  method: PATCH
+                  authorizer: ${file(./serverless/authorizer.js)}
+    
+    updates-delete:
+        handler: src/updates/handler.removeUpdate
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /updates/{id}
+                  method: DELETE
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    metrics:
+        handler: src/metrics/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /metrics-config
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    metrics-post:
+        handler: src/metrics/handler.postMetric
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /metrics-config
+                  method: POST
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    metrics-delete:
+        handler: src/metrics/handler.removeMetric
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /metrics-config/{id}
+                  method: DELETE
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    settings:
+        handler: src/organization-settings/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /organization-settings
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    settings-post:
+        handler: src/organization-settings/handler.post
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /organization-settings
+                  method: POST
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    settings-initiate-upload:
+        handler: src/organization-settings/handler.initiateupload
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /organization-settings/{subFolder}/logos/initiate-upload
+                  method: POST
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    subscribe_threshold_notification:
+        handler: src/subscriptions/handler.subscribeToThresholdNotification
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /notification/subscription/threshold
+                  method: POST
+                  cors: true
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    get_threshold_notification:
+        handler: src/subscriptions/handler.getThresholdSubscription
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /notification/subscription/threshold
+                  method: GET
+                  cors: true
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    inactivate_threshold_notification:
+        handler: src/subscriptions/handler.inactivateThresholdSubscription
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /notification/subscription/threshold/inactivate
+                  method: POST
+                  cors: true
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    user-settings:
+        handler: src/user/handler.updateUserSettings
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /user-settings
+                  method: POST
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    user-switch-dashboard:
+        handler: src/user/handler.switchUserDashboard
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /user-switch-dashboard
+                  method: POST
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    user:
+        handler: src/user/handler.saveUser
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /user
+                  method: POST
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    user-send-password-reset:
+        handler: src/user/handler.sendPasswordReset
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /sendPasswordReset
+                  method: POST
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    fql-validation:
+        handler: src/fql/handler.FQLValidation
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/{provider}/{namespace}/fql-validation
+                  method: POST
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    fql-obeya-validation:
+        handler: src/fql/handler.FQLObeyaValidation
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /fql-obeya-validation
+                  method: POST
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    get-user-info:
+        handler: src/user/handler.getUserTermsInfo
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /user-info
+                  method: get
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    customfields-get:
+        handler: src/datasources/customfields/handler.get
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/{provider}/{namespace}/customfields
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    customfields-post:
+        handler: src/datasources/customfields/handler.post
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/{provider}/{namespace}/customfields
+                  method: POST
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    customfields-jira-cloud:
+        handler: src/datasources/jira-cloud.customfields
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/jira-cloud/{namespace}/customfields/import
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+    customfields-jira-server:
+        handler: src/datasources/jira-server.customfields
+        memorySize: 2048
+        timeout: 300
+        events:
+            - httpApi:
+                  path: /datasources/jira-server/{namespace}/customfields/import
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    customfields-azure:
+        handler: src/datasources/azure.customfields
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /datasources/azure-boards/{namespace}/customfields/import
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    slackTelemetryConsumer:
+        handler: src/customer_telemetry/handlers/customer_telemetry_handler.slackConsumerHandler
+        memorySize: 2048
+        events:
+            - sns: 'falcon-metrics-customer-telemetry'
+    datadogTelemetryConsumer:
+        handler: src/customer_telemetry/handlers/customer_telemetry_handler.datadogConsumerHandler
+        memorySize: 2048
+        events:
+            - sns: 'falcon-metrics-customer-telemetry'
+
+    processCustomerTelemetry:
+        handler: src/customer_telemetry/handlers/customer_telemetry_handler.processHandler
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /telemetry
+                  method: post
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    getMockData:
+        handler: src/mock_data/mock_data_handler.getMockDataHandler
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /mock-data
+                  method: post
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    normalization-configured-categories:
+        handler: src/normalization/handler.getConfiguredCategories
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /normalization/configured-categories
+                  method: get
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    normalization-filter-colors:
+        handler: src/normalization/handler.getFilterColors
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /normalization/filter-colors
+                  method: get
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    notifications:
+        handler: src/notifications/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /notifications
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    get-labels:
+        handler: src/organization-settings/handler.getLabels
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /analytics-context-labels
+                  method: get
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    delivery-governance-demand-distribution:
+        handler: src/value_stream_management/delivery_governance/normalisation_charts/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /value-stream-management/delivery-governance/normalisation-charts
+                  method: get
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    delivery-governance-class-of-service:
+        handler: src/value_stream_management/delivery_governance/normalisation_charts_options/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /value-stream-management/delivery-governance/normalisation-charts-options
+                  method: get
+                  authorizer: ${file(./serverless/authorizer.js)}
+    
+    delivery-governance-bottleneck-finder:
+        handler: src/value_stream_management/delivery_governance/bottleneck_finder/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /value-stream-management/continuous-improvements/bottleneck-finder
+                  method: get
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    inventory:
+        handler: src/value_stream_management/delivery_governance/class_of_service/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /value-stream-management/delivery-governance/class-of-service
+                  method: get
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    delivery-governance-fitness-criteria:
+        handler: src/value_stream_management/delivery_governance/fitness_criteria/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /value-stream-management/delivery-governance/fitness-criteria
+                  method: get
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    delivery-governance-flow-eff-history:
+        handler: src/value_stream_management/delivery_governance/fitness_criteria/handler.flowEfficiencyHistory
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /value-stream-management/delivery-governance/flow-efficiency-history
+                  method: get
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    delivery-governance-flow-of-demands:
+        handler: src/value_stream_management/delivery_governance/flow_of_demands/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /value-stream-management/delivery-governance/flow-of-demands
+                  method: GET
+                  cors: true
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    delivery-governance-source-of-delay:
+        handler: src/value_stream_management/delivery_governance/sources_of_delay_and_waste/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /value-stream-management/delivery-governance/source-of-delay-and-waste
+                  method: get
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    extended-work-items:
+        handler: src/extended_work_items/handler.getEverything
+        memorySize: 3072
+        events:
+            - httpApi:
+                  path: /extended-work-items
+                  method: GET
+                  cors: true
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    portfolios:
+        handler: src/portfolios/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /portfolios
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    portfolios-focus:
+        handler: src/portfolios/handler.getFocus
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /portfolios/focus
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    portfolios-post:
+        handler: src/portfolios/handler.post
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /portfolios/create
+                  method: POST
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    portfolios-patch:
+        handler: src/portfolios/handler.patch
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /portfolios/update
+                  method: PATCH
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    portfolios-delete:
+        handler: src/portfolios/handler.remove
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /portfolios/delete/{id}
+                  method: DELETE
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    relationships-post:
+        handler: src/relationships/handler.createRelationship
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /relationships
+                  method: POST
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    relationships-get:
+        handler: src/relationships/handler.getRelationships
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /relationships
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    relationships-delete:
+        handler: src/relationships/handler.deleteRelationships
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /relationships
+                  method: DELETE
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    relationships-get-elements:
+        handler: src/relationships/handler.getElements
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /relationships/elements
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    link-map-data:
+        handler: src/link_map/handler.getData
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /link-map
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    link-map-layout-save:
+        handler: src/link_map/handler.saveLayout
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /link-map
+                  method: POST
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    business-scorecard-perspectives:
+        handler: src/business_scorecard_perspectives/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /business_scorecard/perspectives
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    business-scorecard-perspectives-update:
+        handler: src/business_scorecard_perspectives/handler.updatePerspectives
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /business_scorecard/perspectives
+                  method: PATCH
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    business-scorecard-metrics:
+        handler: src/business_scorecard_metrics/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /business_scorecard/metrics
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    business-scorecard-metrics-update:
+        handler: src/business_scorecard_metrics/handler.updateMetrics
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /business_scorecard/metrics
+                  method: PATCH
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    business-scorecard-metric-preview:
+        handler: src/business_scorecard_metrics/handler.getMetric
+        memorySize: 2048
+        events:
+            - httpApi:
+                  path: /business_scorecard/metrics/{metricId}
+                  method: GET
+                  authorizer: ${file(./serverless/authorizer.js)}
+
+    create-seed-data:
+        handler: src/seed_data/handler.getEverything
+        memorySize: 2048
+        events:
+            - httpApi:
+                    path: /create-seed-data
+                    method: POST
+                    cors: true
+                    authorizer: ${file(./serverless/authorizer.js)}
+    
+    users-create:
+        handler: src/users/handler.createUser
+        memorySize: 2048
+        events:
+            - httpApi:
+                    path: /users
+                    method: POST
+                    cors: true
+                    authorizer: ${file(./serverless/authorizer.js)}
+
+    user-delete:
+        handler: src/users/handler.deleteUser
+        memorySize: 2048
+        events:
+            - httpApi:
+                    path: /users/{userId}
+                    method: DELETE
+                    cors: true
+                    authorizer: ${file(./serverless/authorizer.js)}
+
+    users-update:
+        handler: src/users/handler.updateUser
+        memorySize: 2048
+        events:
+            - httpApi:
+                    path: /users/{userId}
+                    method: PATCH
+                    cors: true
+                    authorizer: ${file(./serverless/authorizer.js)}
+    
+    users-get-many:
+        handler: src/users/handler.getUsers
+        memorySize: 2048
+        events:
+            - httpApi:
+                    path: /users
+                    method: GET
+                    cors: true
+                    authorizer: ${file(./serverless/authorizer.js)}
+
+    users-get-one:
+        handler: src/users/handler.getUser
+        memorySize: 2048
+        events:
+            - httpApi:
+                    path: /users/{userId}
+                    method: GET
+                    cors: true
+                    authorizer: ${file(./serverless/authorizer.js)}
+
+    groups-get-many:
+        handler: src/user_groups/handler.getGroupsHandler
+        memorySize: 2048
+        events:
+            - httpApi:
+                path: /groups
+                method: GET
+                cors: true
+                authorizer: ${file(./serverless/authorizer.js)}
+
+    create-group:
+        handler: src/user_groups/handler.createGroupHandler
+        memorySize: 2048
+        events:
+            - httpApi:
+                path: /groups
+                method: POST
+                cors: true
+                authorizer: ${file(./serverless/authorizer.js)}
+
+    update-group:
+        handler: src/user_groups/handler.updateGroupHandler
+        memorySize: 2048
+        events:
+            - httpApi:
+                path: /groups/{groupId}
+                method: PATCH
+                cors: true
+                authorizer: ${file(./serverless/authorizer.js)}
+
+    delete-group:
+        handler: src/user_groups/handler.deleteGroupHandler
+        memorySize: 2048
+        events:
+            - httpApi:
+                path: /groups/{groupId}
+                method: DELETE
+                cors: true
+                authorizer: ${file(./serverless/authorizer.js)}
+    
+    get-group-users:
+        handler: src/user_groups/handler.getGroupUsersHandler
+        memorySize: 2048
+        events:
+            - httpApi:
+                path: /groups/{groupId}/users
+                method: GET
+                cors: true
+                authorizer: ${file(./serverless/authorizer.js)}
+
+    add-group-users:
+        handler: src/user_groups/handler.addUserToGroupHandler
+        memorySize: 2048
+        events:
+            - httpApi:
+                path: /groups/{groupId}/users
+                method: POST
+                cors: true
+                authorizer: ${file(./serverless/authorizer.js)}
+                
+    remove-group-user:
+        handler: src/user_groups/handler.removeUserFromGroupHandler
+        memorySize: 2048
+        events:
+            - httpApi:
+                path: /groups/{groupId}/users/{userId}
+                method: DELETE
+                cors: true
+                authorizer: ${file(./serverless/authorizer.js)}
+
+    initiative-context-mapping-scheduler:
+        handler: src/initiatives/handler.schedule
+        memorySize: 512
+        events:
+        - schedule:
+            name: initiative-context-mapping-schedule
+            description: 'kick off the mapping of context-workitems'
+            rate: rate(10 minutes)
+        # - httpApi:
+        #     path: /kick-off-initiative-mapping ## a place holder event, we will create a eventBridge rule to trigger this function on schedule
+        #     method: GET
+
+    initiative-context-mapping:
+        handler: src/initiatives/handler.process
+        memorySize: 2048
+        timeout: 900
+        events:
+            - sqs:
+                batchSize: 10
+                arn: arn:aws:sqs:ap-southeast-2:906466243975:InitiativeContextWorkItemsMappingQueue.fifo
+            # - httpApi:
+            #     path: /kick-off-initiative-mapping 
+            #     method: GET
+
+    extraction-report:
+        handler: src/extraction_report.get
+        memorySize: 2048
+        timeout: 900
+        events:
+           - httpApi:
+                path: /datasources/{datasourceId}/extraction-report
+                method: GET
+                cors: true
+                authorizer: ${file(./serverless/authorizer.js)}
+    
+    get-dashboard-data:
+        handler: src/custom_dashboards/handler.getEverything
+        memorySize: 2048
+        timeout: 900
+        events:
+           - httpApi:
+                path: /custom-dashboard
+                method: GET
+                cors: true
+                authorizer: ${file(./serverless/authorizer.js)}
+
+    save-dashboard-data:
+        handler: src/custom_dashboards/handler.createDashboardData
+        memorySize: 2048
+        timeout: 900
+        events:
+           - httpApi:
+                path: /custom-dashboard
+                method: POST
+                cors: true
+                authorizer: ${file(./serverless/authorizer.js)}
+    
+    update-dashboard-data:
+        handler: src/custom_dashboards/handler.updateDashboardData
+        memorySize: 2048
+        timeout: 900
+        events:
+           - httpApi:
+                path: /custom-dashboard
+                method: PATCH
+                cors: true
+                authorizer: ${file(./serverless/authorizer.js)}
+        
+resources:
+    Resources: ${file(./serverless/resources.js)}

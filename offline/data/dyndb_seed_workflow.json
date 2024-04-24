@@ -1,0 +1,98 @@
+[
+  {
+    "partitionKey": "config#org-1",
+    "sortKey": "workflow#datasource-2#1",
+    "workflowName": "Software Simplified Workflow for Project",
+    "workflowSteps": [
+      {
+        "id": "10002",
+        "name": "Backlog",
+        "stateCategory": "proposed",
+        "stateType": "queue",
+        "order": 0
+      },
+      {
+        "id": "10081",
+        "name": "In Analysis",
+        "stateCategory": "inprogress",
+        "stateType": "active",
+        "order": 1
+      },
+      {
+        "id": "10038",
+        "name": "Selected for Development",
+        "stateCategory": "inprogress",
+        "stateType": "queue",
+        "order": 2
+      },
+      {
+        "id": "10032",
+        "name": "In Progress",
+        "stateCategory": "inprogress",
+        "stateType": "active",
+        "order": 3
+      },
+      {
+        "id": "10086",
+        "name": "Ready for Testing",
+        "stateCategory": "inprogress",
+        "stateType": "queue",
+        "order": 4
+      },
+      {
+        "id": "10082",
+        "name": "In Testing",
+        "stateCategory": "inprogress",
+        "stateType": "active",
+        "order": 5
+      },
+      {
+        "id": "10009",
+        "name": "Peer Review",
+        "stateCategory": "inprogress",
+        "stateType": "active",
+        "order": 6
+      },
+      {
+        "id": "10108",
+        "name": "Desk Check",
+        "stateCategory": "inprogress",
+        "stateType": "active",
+        "order": 7
+      },
+      {
+        "id": "10020",
+        "name": "Ready for Deploy",
+        "stateCategory": "inprogress",
+        "stateType": "queue",
+        "order": 8
+      },
+      {
+        "id": "10087",
+        "name": "Ready to Release",
+        "stateCategory": "inprogress",
+        "stateType": "queue",
+        "order": 9
+      },
+      {
+        "id": "10001",
+        "name": "Deployed to Prod",
+        "stateCategory": "completed",
+        "stateType": "queue",
+        "order": 10
+      },
+      {
+        "id": "10022",
+        "name": "Done",
+        "stateCategory": "completed",
+        "stateType": "queue",
+        "order": 11
+      }
+    ],
+    "workflowEvents": {
+      "arrivalPointOrder": 0,
+      "commitmentPointOrder": 2,
+      "departurePointOrder": 10
+    }
+  }
+]

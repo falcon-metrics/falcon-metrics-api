@@ -1,0 +1,4 @@
+node_modules
+jest.config.js
+webpack.config.js
+serverless/dynamodb.js

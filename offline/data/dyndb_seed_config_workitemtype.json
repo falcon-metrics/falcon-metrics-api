@@ -1,0 +1,105 @@
+[
+    {
+        "partitionKey": "config#org-1",
+        "sortKey": "workitemtype#1",
+        "displayName": "Epic",
+        "level": "Portfolio",
+        "serviceLevelExpectationInDays": 30
+    },
+    {
+        "partitionKey": "config#org-1",
+        "sortKey": "workitemtypemap#datasource-1#epic",
+        "workItemTypeId": "1"
+    },
+    {
+        "partitionKey": "config#org-1",
+        "sortKey": "workitemtypemap#datasource-2#10000",
+        "workItemTypeId": "1",
+        "workflowId": "1"
+    },
+    {
+        "partitionKey": "config#org-1",
+        "sortKey": "workitemtype#2",
+        "displayName": "Feature",
+        "level": "Portfolio",
+        "serviceLevelExpectationInDays": 10
+    },
+    {
+        "partitionKey": "config#org-1",
+        "sortKey": "workitemtypemap#datasource-1#feature",
+        "workItemTypeId": "2"
+    },
+    {
+        "partitionKey": "config#org-1",
+        "sortKey": "workitemtypemap#datasource-2#10056",
+        "workItemTypeId": "2",
+        "workflowId": "1"
+    },
+    {
+        "partitionKey": "config#org-1",
+        "sortKey": "workitemtype#3",
+        "displayName": "User Story",
+        "level": "Requirement",
+        "serviceLevelExpectationInDays": 5
+    },
+    {
+        "partitionKey": "config#org-1",
+        "sortKey": "workitemtypemap#datasource-1#user story",
+        "workItemTypeId": "3"
+    },
+    {
+        "partitionKey": "config#org-1",
+        "sortKey": "workitemtypemap#datasource-2#10001",
+        "workItemTypeId": "3",
+        "workflowId": "1"
+    },
+    {
+        "partitionKey": "config#org-1",
+        "sortKey": "workitemtype#4",
+        "displayName": "Bug",
+        "level": "Requirement",
+        "serviceLevelExpectationInDays": 1
+    },
+    {
+        "partitionKey": "config#org-1",
+        "sortKey": "workitemtypemap#datasource-1#bug",
+        "workItemTypeId": "4"
+    },
+    {
+        "partitionKey": "config#org-1",
+        "sortKey": "workitemtypemap#datasource-2#10004",
+        "workItemTypeId": "4",
+        "workflowId": "1"
+    },
+    {
+        "partitionKey": "config#org-1",
+        "sortKey": "workitemtype#5",
+        "displayName": "Task",
+        "level": "Team",
+        "serviceLevelExpectationInDays": 3
+    },
+    {
+        "partitionKey": "config#org-1",
+        "sortKey": "workitemtypemap#datasource-1#task",
+        "workItemTypeId": "5"
+    },
+    {
+        "partitionKey": "config#org-1",
+        "sortKey": "workitemtypemap#datasource-2#10002",
+        "workItemTypeId": "5",
+        "workflowId": "1"
+    },
+    {
+        "partitionKey": "config#org-1",
+        "sortKey": "workitemtype#7",
+        "displayName": "Sub-task",
+        "level": "Team",
+        "serviceLevelExpectationInDays": 3
+    },
+    {
+        "partitionKey": "config#org-1",
+        "sortKey": "workitemtypemap#datasource-2#10003",
+        "workItemTypeId": "7",
+        "workflowId": "1"
+    }
+]

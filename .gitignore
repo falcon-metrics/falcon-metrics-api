@@ -1,0 +1,21 @@
+# package directories
+node_modules
+jspm_packages
+coverage
+
+# Serverless directories
+.serverless
+.webpack
+.dynamodb
+.middleware
+
+# Eclipse IDE
+.settings
+.project
+.env
+
+# vscode
+.vscode**
+
+#temporary file
+**.temp**
