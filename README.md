@@ -99,49 +99,49 @@ This will execute eslint and re-format code according to the lint rules.
 * [Microsoft rest guidelines](https://docs.microsoft.com/en-us/azure/architecture/best-practices/api-design "Microsoft guidelines") 
 
 ## Points to note
-The application is tightly coupled with certain integration eg: Auth0 for auhentication.
-We have added example configs and helpful comments wherever applicable.
-When you choose to create you accounts in these integrations , you need to replace the example configs in this repo wherever applicable.
+- The application is tightly coupled with certain integration eg: Auth0 for auhentication.
+- We have added example configs and helpful comments wherever applicable.
+- When you choose to create you accounts in these integrations , you need to replace the example configs in this repo wherever applicable.
 
-Auth0
-Refer /src/common/dependency_injection.ts - to see what claims the app checks from auth0 jwt
-src/common/security.ts -  to see the role names to set in auth0
-src/datasources/jwtToUser.ts - to also see role name and claim names
-src/signup/handler.ts - Change the default role id , retrieve it from auth0 based on your needs. ( this is the default role assigned on sign up)
+### Auth0
+- Refer /src/common/dependency_injection.ts - to see what claims the app checks from auth0 jwt
+- src/common/security.ts -  to see the role names to set in auth0
+- src/datasources/jwtToUser.ts - to also see role name and claim names
+- src/signup/handler.ts - Change the default role id , retrieve it from auth0 based on your needs. ( this is the default role assigned on sign up)
 
-Contact us
-Contact us email should be edited here  - src/contact_us/handler.ts
+### Contact us
+- Contact us email should be edited here  - src/contact_us/handler.ts
 
-Datadog
-Datadog is used to capture user telemetry data.It can be setup here
-src/customer_telemetry/sns_consumers/datadog_consumer.ts
+### Datadog
+- Datadog is used to capture user telemetry data.It can be setup here
+- src/customer_telemetry/sns_consumers/datadog_consumer.ts
 
-Slack
-There are certain slack integrations available as well. They can be configured here
-src/customer_telemetry/sns_consumers/slack_consumer.ts
+### Slack
+- There are certain slack integrations available as well. They can be configured here
+- src/customer_telemetry/sns_consumers/slack_consumer.ts
 
-Logo
-We allow different tenants to store their own logo so that the UI can display the same on the app.
-It is stored in s3 bucket , which can be configured here.
-The same bucker needs to be configured on the front end code for it to take effect.
-Bucket name -  falcon-metrics-settings-logo-storage
-Can be configured here - src/organization-settings/handleSettings.ts
+### Logo
+- We allow different tenants to store their own logo so that the UI can display the same on the app.
+- It is stored in s3 bucket , which can be configured here.
+- The same bucker needs to be configured on the front end code for it to take effect.
+- Bucket name -  falcon-metrics-settings-logo-storage
+- Can be configured here - src/organization-settings/handleSettings.ts
 
-Demo organisation
-There is some code to avoid and specially handle demo organisation.( where mock data to test the platform can be setup)
-Currently the orgId for the same - falcon-metrics-demo
+### Demo organisation
+- There is some code to avoid and specially handle demo organisation.( where mock data to test the platform can be setup)
+- Currently the orgId for the same - falcon-metrics-demo
 
-Hubspot
-There is a basic hubspot integration on sign up.
-src/hubspot/Hubspot.ts
+### Hubspot
+- There is a basic hubspot integration on sign up.
+- src/hubspot/Hubspot.ts
 
-Mailchimp
-There is mailchimp integration setup to send emails.
-src/contact_us/MailChimpSecret.ts
-Support email : support@falcon-metrics.com
-Owner email : owner@falcon-metrics.com
+### Serverless
+- The serverless.yml file creates all the api gateways and the lambdas.
+- It requires specific configurations related to the AWS instance where the app is meant to be deployed.
+- There are helpful comments to replace the examples that are added.
 
-Serverless
-The serverless.yml file creates all the api gateways and the lambdas.
-It requires specific configurations related to the AWS instance where the app is meant to be deployed.
-There are helpful comments to replace the examples that are added.
+### Mailchimp
+- There is mailchimp integration setup to send emails.
+- src/contact_us/MailChimpSecret.ts
+### Support email : support@falcon-metrics.com
+### Owner email : owner@falcon-metrics.com
